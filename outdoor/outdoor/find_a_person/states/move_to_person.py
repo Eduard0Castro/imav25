@@ -15,7 +15,6 @@ class MoveToPerson(State):
     A state to centralize the drone with the target person
     """
 
-
     def __init__(self) -> None:
 
         super().__init__(outcomes=[SUCCEED, ABORT])
@@ -36,16 +35,13 @@ class MoveToPerson(State):
         self.__coordinates_timer = self.node.create_timer(0.0001, self.get_coordinates)
 
         try:
-            while not self.stop:
-                rclpy.spin_once(self.node)
-
-            # self.__coordinates_timer.destroy()
-            # cv2.destroyAllWindows()
-            # self.oakd.close()
-                
+            while not self.stop: rclpy.spin_once(self.node)
 
         except Exception as ex: 
+            cv2.destroyAllWindows()
+            if self.oakd.device: self.oakd.close()
             yasmin.YASMIN_LOG_ERROR(f"Move to person gets an error: {ex}")
+
             return ABORT
                 
         else: return SUCCEED
@@ -71,23 +67,23 @@ class MoveToPerson(State):
                 label = self.labels[detection.label]
             except:
                 label = detection.label
-            cv2.putText(frame, str(label), (x1 + 10, y1 + 20), cv2.FONT_HERSHEY_TRIPLEX, 0.5, 255)
-            cv2.putText(frame, "{:.2f}".format(detection.confidence*100), (x1 + 10, y1 + 35), cv2.FONT_HERSHEY_TRIPLEX, 0.5, 255)
-            cv2.putText(frame, f"X: {int(detection.spatialCoordinates.x)} mm", (x1 + 10, y1 + 50), cv2.FONT_HERSHEY_TRIPLEX, 0.5, 255)
-            cv2.putText(frame, f"Y: {int(detection.spatialCoordinates.y)} mm", (x1 + 10, y1 + 65), cv2.FONT_HERSHEY_TRIPLEX, 0.5, 255)
-            cv2.putText(frame, f"Z: {int(detection.spatialCoordinates.z)} mm", (x1 + 10, y1 + 80), cv2.FONT_HERSHEY_TRIPLEX, 0.5, 255)
+            cv2.putText(frame, str(label), (x1 + 10, y1 + 20), 
+                        cv2.FONT_HERSHEY_TRIPLEX, 0.5, 255)
+            cv2.putText(frame, "{:.2f}".format(detection.confidence*100), 
+                        (x1 + 10, y1 + 35), cv2.FONT_HERSHEY_TRIPLEX, 0.5, 255)
+            cv2.putText(frame, f"X: {int(detection.spatialCoordinates.x)} mm", 
+                        (x1 + 10, y1 + 50), cv2.FONT_HERSHEY_TRIPLEX, 0.5, 255)
+            cv2.putText(frame, f"Y: {int(detection.spatialCoordinates.y)} mm", 
+                        (x1 + 10, y1 + 65), cv2.FONT_HERSHEY_TRIPLEX, 0.5, 255)
+            cv2.putText(frame, f"Z: {int(detection.spatialCoordinates.z)} mm", 
+                        (x1 + 10, y1 + 80), cv2.FONT_HERSHEY_TRIPLEX, 0.5, 255)
 
             cv2.rectangle(frame, (x1, y1), (x2, y2), (255, 0, 0), cv2.FONT_HERSHEY_SIMPLEX)
         
         cv2.imshow("Detections", frame)  
 
         if cv2.waitKey(1) & 0xFF == ord("q"):
-            self.oakd.close()
             cv2.destroyAllWindows()
+            self.oakd.close()
             self.__coordinates_timer.destroy()
             self.stop = True
-
-        
-
-
-

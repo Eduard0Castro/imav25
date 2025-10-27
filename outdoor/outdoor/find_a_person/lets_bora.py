@@ -8,8 +8,8 @@ from yasmin_ros.basic_outcomes import SUCCEED, ABORT
 import yasmin
 
 from outdoor.find_a_person.states import (OakdConfig, 
-                                               MoveToPerson,
-                                               EndMission)
+                                          MoveToPerson,
+                                          EndMission)
 
 
 class LetsBoraSM(StateMachine):
