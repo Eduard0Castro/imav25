@@ -1,0 +1,4 @@
+<launch>
+    <node pkg = 'outdoor' exec = 'movement_mapping' name = 'movement_mapping'/>
+    <node pkg = 'outdoor' exec = 'photos_mapping' name = 'photos_mapping'/>
+</launch>
