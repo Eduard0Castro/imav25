@@ -32,6 +32,7 @@ setup(
             "find_a_person    = outdoor.find_a_person.lets_bora:main",
             "movement_mapping = outdoor.mapping.movement_mapping:main",
             "photos_mapping   = outdoor.mapping.photos_mapping:main",
+            "full_mapping     = outdoor.mapping.mapping_sm:main",
         ],
     },
 )

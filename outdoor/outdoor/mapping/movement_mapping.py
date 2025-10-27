@@ -56,7 +56,7 @@ class MovementMapping(Node):
         
         for lat, long in self.coordinates:
             heading = self.drone.gps_controller.calculate_bearing(lat, long)
-            self.drone.offboard_gps_position(lat, long, self.altitude, heading, 1.0, False)
+            self.drone.offboard_position_gps_coords(lat, long, heading=heading, strategy="mavros")
             self.drone.delay(2.0)
             self.stopped_mapping_pub.publish(self.msg)
             self.drone.delay(1.0)
