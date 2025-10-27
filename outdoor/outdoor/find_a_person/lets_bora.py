@@ -4,7 +4,7 @@ logging.basicConfig(level=logging.INFO)
 import rclpy
 from yasmin import StateMachine
 
-from yasmin_ros.basic_outcomes import SUCCEED, ABORT
+from yasmin_ros.basic_outcomes import SUCCEED, ABORT, RETRY
 import yasmin
 
 from outdoor.find_a_person.states import (OakdConfig, 
@@ -21,8 +21,7 @@ class LetsBoraSM(StateMachine):
         self.add_state(
             name="OAK-D CONFIG",
             state = OakdConfig(),
-            transitions={SUCCEED: "MOVE TO PERSON", ABORT: "OAK-D CONFIG"},
-
+            transitions={SUCCEED: "MOVE TO PERSON", RETRY: "OAK-D CONFIG"},
         )
 
         self.add_state(
@@ -46,6 +45,7 @@ def main() -> None:
         status = bora()
         yasmin.YASMIN_LOG_INFO(f"Mission status: {status}")
 
+    except KeyboardInterrupt:...
     except Exception as ex: 
         print(f"Mission failed with exception: {ex}")
 

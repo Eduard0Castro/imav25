@@ -6,13 +6,13 @@ from outdoor.find_a_person.constants import LABELS
 import yasmin
 from yasmin.blackboard import Blackboard
 from yasmin import State
-from yasmin_ros.basic_outcomes import SUCCEED, ABORT
+from yasmin_ros.basic_outcomes import SUCCEED, RETRY
 
 class OakdConfig(State):
 
     def __init__(self) -> None:
 
-        super().__init__(outcomes={SUCCEED, ABORT})
+        super().__init__(outcomes={SUCCEED, RETRY})
 
 
     def __init_oakd(self) -> None:
@@ -33,7 +33,7 @@ class OakdConfig(State):
 
     def execute(self, blackboard: Blackboard) -> str:
 
-        yasmin.YASMIN_LOG_INFO("Executing OAK-D initial configs")
+        yasmin.YASMIN_LOG_INFO("Executing OAK-D initial configs ble")
 
         try:
             self.__init_oakd()
@@ -41,7 +41,7 @@ class OakdConfig(State):
 
         except Exception as ex:
             yasmin.YASMIN_LOG_ERROR(f"OAK-D config gets an error: {ex}")
-            return ABORT
+            return RETRY
         else: 
             
             blackboard['oakd_object'] = self.oakd
