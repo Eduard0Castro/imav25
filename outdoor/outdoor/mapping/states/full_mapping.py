@@ -52,6 +52,7 @@ class FullMapping(State):
                     self.coordinates[index] = None
 
         except Exception as ex:
+            if self.oakd.device: self.oakd.close()
             yasmin.YASMIN_LOG_ERROR(f"Full mapping mission gets an error: {ex}")
             return ABORT
         else: return SUCCEED
