@@ -6,6 +6,7 @@ from yasmin.blackboard import Blackboard
 from yasmin_ros.basic_outcomes import SUCCEED, ABORT
 
 from mirela_sdk.control.mavros.mavros_api import MavDrone
+from mirela_sdk.image_processing import OakdCam
 
 class InitializeMission(State):
 
@@ -14,18 +15,25 @@ class InitializeMission(State):
         super().__init__(outcomes={SUCCEED, ABORT})
 
         self.node = YasminNode.get_instance()
-        self.drone = MavDrone(self.node, False)
+        # self.drone = MavDrone(self.node, False)
 
 
     def execute(self, blackboard: Blackboard) -> str:
         
-        blackboard["drone"] = self.drone
-        self.drone.check_driver_node(2.0)
+        # blackboard["drone"] = self.drone
+        # self.drone.check_driver_node(2.0)
 
-        self.drone.arm_takeoff(10.0)
-        #self.drone.offboard_gps_position()
-
-        return SUCCEED
+        try:...
+            # self.drone.arm_takeoff(10.0)
+            # self.drone.offboard_position_gps_coords(latitude = 0.0, 
+            #                                         longitude = 0.0, 
+            #                                         strategy = "mavros")
+            
+        except Exception as ex:
+            yasmin.YASMIN_LOG_ERROR(f"Initialize state gets an error: {ex}")
+            return ABORT
+        
+        else: return SUCCEED
     
 class EndMission(State):
 
@@ -38,6 +46,8 @@ class EndMission(State):
 
         try:
             yasmin.YASMIN_LOG_INFO("Ending state")
+            oakd: OakdCam = blackboard['oakd_object']
+            if oakd.device: oakd.close()
             # drone: MavDrone = blackboard['drone']
             # drone.rtl(10)
 
@@ -45,14 +55,3 @@ class EndMission(State):
             yasmin.YASMIN_LOG_ERROR(f"Exception {ex}")
             return ABORT
         else: return SUCCEED
-
-
-        
-        
-        
-
-
-
-
-
-

@@ -3,3 +3,4 @@ LABELS = ["background", "aeroplane", "bicycle", "bird", "boat",
           "diningtable", "dog", "horse", "motorbike", "person",
           "pottedplant", "sheep", "sofa", "train", "tvmonitor"]
 
+CENTRE_FRAME = (150, 150)

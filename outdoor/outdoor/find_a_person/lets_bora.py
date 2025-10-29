@@ -7,7 +7,8 @@ from yasmin import StateMachine
 from yasmin_ros.basic_outcomes import SUCCEED, ABORT, RETRY
 import yasmin
 
-from outdoor.find_a_person.states import (OakdConfig, 
+from outdoor.find_a_person.states import (InitializeMission,
+                                          OakdConfig, 
                                           MoveToPerson,
                                           EndMission)
 
@@ -19,6 +20,12 @@ class LetsBoraSM(StateMachine):
         super().__init__(outcomes={SUCCEED, ABORT})
 
         self.add_state(
+            name = "INITIALIZE MISSION",
+            state = InitializeMission(),
+            transitions = {SUCCEED: "OAK-D CONFIG", ABORT: "END MISSION"}
+        )
+
+        self.add_state(
             name="OAK-D CONFIG",
             state = OakdConfig(),
             transitions={SUCCEED: "MOVE TO PERSON", RETRY: "OAK-D CONFIG"},
@@ -27,11 +34,11 @@ class LetsBoraSM(StateMachine):
         self.add_state(
             name = "MOVE TO PERSON", 
             state = MoveToPerson(),
-            transitions={SUCCEED: "END", ABORT: "OAK-D CONFIG"}
+            transitions={SUCCEED: "END MISSION", ABORT: "OAK-D CONFIG"}
         )
 
         self.add_state(
-            name = "END",
+            name = "END MISSION",
             state = EndMission(),
             transitions = {SUCCEED:SUCCEED}
         )
