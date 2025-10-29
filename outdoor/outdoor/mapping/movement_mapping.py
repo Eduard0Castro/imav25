@@ -8,6 +8,8 @@ from rclpy.qos import (QoSProfile,
 from mirela_sdk.control.mavros.mavros_api import MavDrone
 from mavros_msgs.msg import LogData
 
+from outdoor.mapping.constants import COORDINATES
+
 
 class MovementMapping(Node):
 
@@ -20,17 +22,7 @@ class MovementMapping(Node):
         self.altitude = 60.0
 
         
-        self.coordinates =                  [(51.40330360, -2.82067540),
-                                             (51.40369690, -2.82085510),
-                                             (51.40352620, -2.82115010),
-                                             (51.40311960, -2.82091680),
-                                             (51.40291710, -2.82119040),
-                                             (51.40343250, -2.82151760),
-                                             (51.40326180, -2.82185290),
-                                             (51.40278160, -2.82150690),
-                                             (51.40251050, -2.82167850),
-                                             (51.40292720, -2.82202180),
-                                             (51.40323750, -2.82227260),]
+        self.coordinates = COORDINATES
         
 
         self.drone = MavDrone(self, False)
