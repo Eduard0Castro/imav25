@@ -22,11 +22,15 @@ class InitializeMission(State):
         
         blackboard["drone"] = self.drone
         self.drone.check_driver_node(2.0)
+        lat =  18.9438158
+        long = -98.188531
 
         try:
             self.drone.arm_takeoff(20.0)
-            self.drone.offboard_position_gps_coords(latitude = 18.9438158, 
-                                                    longitude = -98.188531, 
+            heading = self.drone.gps_controller.calculate_bearing(lat, long)
+            self.drone.offboard_position_gps_coords(latitude = lat, 
+                                                    longitude = long, 
+                                                    heading= heading,
                                                     strategy = "mavros")
             
         except Exception as ex:
