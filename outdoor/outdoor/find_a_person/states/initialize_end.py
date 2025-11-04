@@ -15,19 +15,19 @@ class InitializeMission(State):
         super().__init__(outcomes={SUCCEED, ABORT})
 
         self.node = YasminNode.get_instance()
-        # self.drone = MavDrone(self.node, False)
+        self.drone = MavDrone(self.node, False)
 
 
     def execute(self, blackboard: Blackboard) -> str:
         
-        # blackboard["drone"] = self.drone
-        # self.drone.check_driver_node(2.0)
+        blackboard["drone"] = self.drone
+        self.drone.check_driver_node(2.0)
 
-        try:...
-            # self.drone.arm_takeoff(10.0)
-            # self.drone.offboard_position_gps_coords(latitude = 0.0, 
-            #                                         longitude = 0.0, 
-            #                                         strategy = "mavros")
+        try:
+            self.drone.arm_takeoff(20.0)
+            self.drone.offboard_position_gps_coords(latitude = 18.9438158, 
+                                                    longitude = -98.188531, 
+                                                    strategy = "mavros")
             
         except Exception as ex:
             yasmin.YASMIN_LOG_ERROR(f"Initialize state gets an error: {ex}")
@@ -46,10 +46,6 @@ class EndMission(State):
 
         try:
             yasmin.YASMIN_LOG_INFO("Ending state")
-            oakd: OakdCam = blackboard['oakd_object']
-            if oakd.device: oakd.close()
-            # drone: MavDrone = blackboard['drone']
-            # drone.rtl(10)
 
         except Exception as ex:
             yasmin.YASMIN_LOG_ERROR(f"Exception {ex}")

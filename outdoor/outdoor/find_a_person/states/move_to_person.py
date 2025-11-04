@@ -2,6 +2,8 @@ import cv2
 
 import numpy as np
 
+from enum import Enum
+
 import rclpy
 import yasmin
 from yasmin_ros.yasmin_node import YasminNode
@@ -13,6 +15,14 @@ from yasmin_ros.basic_outcomes import SUCCEED, ABORT
 from mirela_sdk.control.mavros import MavDrone
 
 from outdoor.find_a_person.constants import CENTRE_FRAME
+
+class Manequim(Enum):
+    
+    OS_BP = 2,
+    OS_WP = 1,
+    YB_C = 3
+    YY_C = 4
+
 
 class MoveToPerson(State):
 
@@ -37,13 +47,25 @@ class MoveToPerson(State):
         self.preview_queue     = blackboard['preview_queue']
         self.drone : MavDrone  = blackboard['drone']
 
+        self.manequim = Manequim.OS_WP.value
+
         self.stop = False
         self.keep_searching = True
+        self.people = 0
 
         self.__coordinates_timer = self.node.create_timer(0.0001, self.get_coordinates)
+        lat, long = self.drone.get_gps.latitude, self.drone.get_gps.longitude
+        altitude = self.drone.get_gps.altitude - 17.0
+
+        self.drone.offboard_position_gps_coords(lat, long, altitude, strategy="mavros")
+
 
         try:
-            while not self.stop: rclpy.spin_once(self.node, timeout_sec = 0.01)
+            while not self.stop: 
+                rclpy.spin_once(self.node, timeout_sec = 0.01)
+                if self.keep_searching:
+                    self.drone.offboard_velocity(0.0, 0.0, 0.0, 0.1)
+
 
         except Exception as ex: 
             cv2.destroyAllWindows()
@@ -54,26 +76,17 @@ class MoveToPerson(State):
                 
         else: return SUCCEED
 
-    def search_for_person(self)-> None:
-
-        lat, long = self.drone.get_gps.latitude, self.drone.get_gps.longitude
-        altitude = self.drone.get_gps.altitude - 25.0
-
-        self.drone.offboard_position_gps_coords(lat, long, altitude, strategy="mavros")
-
-        while self.keep_searching:
-            rclpy.spin_once(self.node)
-            self.drone.offboard_velocity(0.0, 0.0, 0.0, 0.1)
 
     def go_to_person(self, detection) -> None:
 
-        distance = detection.spatialCoordinates.z
+        distance = detection.spatialCoordinates.z/1000.0
 
         move = distance - 1.5
         velocity_x = 3.0
 
         self.drone.offboard_velocity_timer(velocity_x, time = move/velocity_x)
-        self.drone.land()
+        self.drone.land()            
+        self.stop = True
         
 
     def get_coordinates(self) -> None:
@@ -90,43 +103,23 @@ class MoveToPerson(State):
         
         for detection in detections:
 
-            # Denormalize bounding box
-            x1 = int(detection.xmin * width)
-            x2 = int(detection.xmax * width)
-            y1 = int(detection.ymin * height)
-            y2 = int(detection.ymax * height)
             try:
                 label = self.labels[detection.label]
             except:
                 label = detection.label
-
-            cv2.putText(frame, str(label), (x1 + 10, y1 + 20), 
-                        cv2.FONT_HERSHEY_TRIPLEX, 0.5, 255)
-            cv2.putText(frame, "{:.2f}".format(detection.confidence*100), 
-                        (x1 + 10, y1 + 35), cv2.FONT_HERSHEY_TRIPLEX, 0.5, 255)
-            cv2.putText(frame, f"X: {int(detection.spatialCoordinates.x)} mm", 
-                        (x1 + 10, y1 + 50), cv2.FONT_HERSHEY_TRIPLEX, 0.5, 255)
-            cv2.putText(frame, f"Y: {int(detection.spatialCoordinates.y)} mm", 
-                        (x1 + 10, y1 + 65), cv2.FONT_HERSHEY_TRIPLEX, 0.5, 255)
-            cv2.putText(frame, f"Z: {int(detection.spatialCoordinates.z)} mm", 
-                        (x1 + 10, y1 + 80), cv2.FONT_HERSHEY_TRIPLEX, 0.5, 255)
-
-            cv2.rectangle(frame, (x1, y1), (x2, y2), (255, 0, 0), cv2.FONT_HERSHEY_SIMPLEX)
                 
             if label == 'person':
                 
                 self.people_centre.append(detection.spatialCoordinates.z)
 
         if len(self.people_centre) > 0:
-            closest_person = np.argmin(self.people_centre)
-            detection = detections[closest_person]
-            self.keep_searching = False
+            self.people += 1
+            if self.people == self.manequim:
+                closest_person = np.argmin(self.people_centre)
+                detection = detections[closest_person]
+                self.keep_searching = False
+                self.oakd.close()
+                self.__coordinates_timer.destroy()
+                self.go_to_person()
             
         else: yasmin.YASMIN_LOG_INFO("NO PERSON")
-
-        cv2.imshow("Teste", frame)
-        if cv2.waitKey(1) & 0xFF == ord("q"):
-            cv2.destroyAllWindows()
-            self.oakd.close()
-            self.__coordinates_timer.destroy()
-            self.stop = True
