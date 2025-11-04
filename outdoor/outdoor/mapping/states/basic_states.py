@@ -24,7 +24,7 @@ class InitializeMission(State):
         blackboard['drone'] = self.drone
 
         self.drone.arm_takeoff(ALTITUDE)
-        self.drone.delay(17.0)
+        self.drone.delay(30.0)
 
         return SUCCEED
 
@@ -57,8 +57,10 @@ class EndMission(State):
     def execute(self, blackboard: Blackboard) -> str:
         
         try:
+            oakd:OakdCam = blackboard['oakd']
+            oakd.close()
             drone: MavDrone = blackboard['drone']
-            drone.rtl(ALTITUDE)
+            drone.rtl(ALTITUDE, rtl_strategy="mavros")
 
         except Exception as ex:
             yasmin.YASMIN_LOG_ERROR(f"End Mission exception: {ex}")
