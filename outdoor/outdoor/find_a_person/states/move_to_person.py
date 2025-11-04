@@ -35,11 +35,10 @@ class MoveToPerson(State):
         self.detection_nnqueue = blackboard['detection_nnqueue']
         self.labels            = blackboard['labels']
         self.preview_queue     = blackboard['preview_queue']
-        # self.drone : MavDrone  = blackboard['drone']
+        self.drone : MavDrone  = blackboard['drone']
 
         self.stop = False
-        self.x_centre = 150
-        self.y_centre = 150
+        self.keep_searching = True
 
         self.__coordinates_timer = self.node.create_timer(0.0001, self.get_coordinates)
 
@@ -54,6 +53,28 @@ class MoveToPerson(State):
             return ABORT
                 
         else: return SUCCEED
+
+    def search_for_person(self)-> None:
+
+        lat, long = self.drone.get_gps.latitude, self.drone.get_gps.longitude
+        altitude = self.drone.get_gps.altitude - 25.0
+
+        self.drone.offboard_position_gps_coords(lat, long, altitude, strategy="mavros")
+
+        while self.keep_searching:
+            rclpy.spin_once(self.node)
+            self.drone.offboard_velocity(0.0, 0.0, 0.0, 0.1)
+
+    def go_to_person(self, detection) -> None:
+
+        distance = detection.spatialCoordinates.z
+
+        move = distance - 1.5
+        velocity_x = 3.0
+
+        self.drone.offboard_velocity_timer(velocity_x, time = move/velocity_x)
+        self.drone.land()
+        
 
     def get_coordinates(self) -> None:
 
@@ -93,19 +114,15 @@ class MoveToPerson(State):
             cv2.rectangle(frame, (x1, y1), (x2, y2), (255, 0, 0), cv2.FONT_HERSHEY_SIMPLEX)
                 
             if label == 'person':
-
-                self.x_centre = (x1+x2)//2
-                self.y_centre = (y1+y2)//2
                 
-                self.people_centre.append((self.x_centre, self.y_centre))
+                self.people_centre.append(detection.spatialCoordinates.z)
 
-        try:
-            self.people_centre = np.array(self.people_centre)
-            min_index = np.argmin(np.linalg.norm(self.people_centre - CENTRE_FRAME))
-            closest_person = self.people_centre[min_index]
+        if len(self.people_centre) > 0:
+            closest_person = np.argmin(self.people_centre)
+            detection = detections[closest_person]
+            self.keep_searching = False
             
-            
-        except Exception: yasmin.YASMIN_LOG_INFO("NO PERSON")
+        else: yasmin.YASMIN_LOG_INFO("NO PERSON")
 
         cv2.imshow("Teste", frame)
         if cv2.waitKey(1) & 0xFF == ord("q"):
