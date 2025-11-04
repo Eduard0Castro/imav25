@@ -25,7 +25,7 @@ class MappingSM(StateMachine):
                        {SUCCEED: "OAK-D CONFIG", ABORT: "INITIALIZE MISSION"},)
         self.add_state("OAK-D CONFIG", 
                        OakdConfig(),
-                       {SUCCEED: "FULL MAPPING", RETRY: "OAK-D CONFIG"})
+                       {SUCCEED: "FULL_MAPPING", RETRY: "OAK-D CONFIG"})
         self.add_state("FULL_MAPPING", 
                        FullMapping(),
                        {SUCCEED:"END MISSION", ABORT: "OAK-D CONFIG"})
