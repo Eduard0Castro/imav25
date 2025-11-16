@@ -1,10 +1,7 @@
-import cv2
-
 import numpy as np
 
-from enum import Enum
+import time
 
-import rclpy
 import yasmin
 from yasmin_ros.yasmin_node import YasminNode
 
@@ -13,15 +10,25 @@ from yasmin import State
 from yasmin_ros.basic_outcomes import SUCCEED, ABORT
 
 from mirela_sdk.control.mavros import MavDrone
+from mirela_sdk.image_processing.camera import OakdCam
+from mirela_sdk.control.pid import PIDController
 
-from outdoor.find_a_person.constants import CENTRE_FRAME
-
-class Manequim(Enum):
-    
-    OS_BP = 2,
-    OS_WP = 1,
-    YB_C = 3
-    YY_C = 4
+from outdoor.find_a_person.constants import (
+    SHAPE, 
+    PERSON, 
+    PRE_CENTERING_TIMEOUT,
+    MOVE_TO_PERSON_TIMEOUT,
+    PERSON_CENTER_KP_Y,
+    PERSON_CENTER_KP_Z,
+    MAX_VELOCITY_YZ,
+    MAX_VELOCITY_X,
+    MIN_VELOCITY_X,
+    GOTO_PERSON_KP_X,
+    PERSON_LAND_DISTANCE,
+    PRE_CENTER_TOLERANCE,
+    DISTANCE_TOLERANCE,
+    CAMERA_CRASH
+    )
 
 
 class MoveToPerson(State):
@@ -32,94 +39,133 @@ class MoveToPerson(State):
 
     def __init__(self) -> None:
 
-        super().__init__(outcomes={SUCCEED, ABORT})
+        super().__init__(outcomes={SUCCEED, 
+                                   CAMERA_CRASH, 
+                                   ABORT})
+
+        self.pid_x = None
+        self.pid_y = None
+        self.pid_z = None
+        self.pre_centered = False
+        self.time_to_land = False
+        self.timeout_controller = False
 
         self.node = YasminNode.get_instance()
 
-        yasmin.YASMIN_LOG_INFO("Move to person state has been initialized")
-  
+    def execute(self, blackboard: Blackboard) -> None:
 
-    def execute(self, blackboard: Blackboard)-> str:
-
-        self.oakd              = blackboard['oakd_object']
+        self.drone: MavDrone   = blackboard[            'drone']
+        self.oakd:  OakdCam    = blackboard[             'oakd']
+        self.preview_queue     = blackboard[    'preview_queue']
         self.detection_nnqueue = blackboard['detection_nnqueue']
-        self.labels            = blackboard['labels']
-        self.preview_queue     = blackboard['preview_queue']
-        self.drone : MavDrone  = blackboard['drone']
+        self.frame_centre = (SHAPE[0]//2, SHAPE[1]//2)
 
-        self.manequim = Manequim.OS_WP.value
+        blackboard['camera_crash_state'] = "MOVE TO PERSON"
 
-        self.stop = False
-        self.keep_searching = True
-        self.people = 0
-
-        self.__coordinates_timer = self.node.create_timer(0.0001, self.get_coordinates)
-        lat, long = self.drone.get_gps.latitude, self.drone.get_gps.longitude
-        altitude = self.drone.get_gps.altitude - 17.0
-
-        self.drone.offboard_position_gps_coords(lat, long, altitude, strategy="mavros")
-
-
-        try:
-            while not self.stop: 
-                rclpy.spin_once(self.node, timeout_sec = 0.01)
-                if self.keep_searching:
-                    self.drone.offboard_velocity(0.0, 0.0, 0.0, 0.1)
-
-
-        except Exception as ex: 
-            cv2.destroyAllWindows()
-            if self.oakd.device: self.oakd.close()
-            yasmin.YASMIN_LOG_ERROR(f"Move to person gets an error: {ex}")
-
-            return ABORT
-                
-        else: return SUCCEED
-
-
-    def go_to_person(self, detection) -> None:
-
-        distance = detection.spatialCoordinates.z/1000.0
-
-        move = distance - 1.5
-        velocity_x = 3.0
-
-        self.drone.offboard_velocity_timer(velocity_x, time = move/velocity_x)
-        self.drone.land()            
-        self.stop = True
-        
-
-    def get_coordinates(self) -> None:
-
-        frame = self.oakd.getFrame(queue=self.preview_queue)
-        inDet = self.detection_nnqueue.get()
-        self.people_centre = list()
-
-        detections = inDet.detections
-
-        # If the frame is available, draw bounding boxes on it and show the frame
-        height = frame.shape[0]
-        width  = frame.shape[1]
-        
-        for detection in detections:
-
-            try:
-                label = self.labels[detection.label]
-            except:
-                label = detection.label
-                
-            if label == 'person':
-                
-                self.people_centre.append(detection.spatialCoordinates.z)
-
-        if len(self.people_centre) > 0:
-            self.people += 1
-            if self.people == self.manequim:
-                closest_person = np.argmin(self.people_centre)
-                detection = detections[closest_person]
-                self.keep_searching = False
-                self.oakd.close()
-                self.__coordinates_timer.destroy()
-                self.go_to_person()
+        if self.pid_y is None:
+            self.pid_y = PIDController(
+                                    kp = PERSON_CENTER_KP_Y,
+                                    ki = 0.0,
+                                    kd = 0.0,
+                                    setpoint = self.frame_centre[0],
+                                    output_limits = (-MAX_VELOCITY_YZ, MAX_VELOCITY_YZ),
+                                    )
+        if self.pid_z is None:
+            self.pid_z = PIDController(
+                                    kp = PERSON_CENTER_KP_Z,
+                                    ki = 0.0,
+                                    kd = 0.0,
+                                    setpoint = self.frame_centre[1],
+                                    output_limits = (-MAX_VELOCITY_YZ, MAX_VELOCITY_YZ),
+                                    )
             
-        else: yasmin.YASMIN_LOG_INFO("NO PERSON")
+        if self.pid_x is None:
+            self.pid_x = PIDController(
+                                    kp = GOTO_PERSON_KP_X,
+                                    ki = 0.0,
+                                    kd = 0.0,
+                                    setpoint = PERSON_LAND_DISTANCE,
+                                    output_limits = (MIN_VELOCITY_X, MAX_VELOCITY_X),
+                                    )
+            
+
+        try: self.__detection_loop()
+        except Exception as ex:
+            yasmin.YASMIN_LOG_ERROR(f"Move to person state gets an error: {ex}")
+            if self.oakd.device.isClosed(): return CAMERA_CRASH
+            return ABORT
+        else:
+            if self.timeout_controller: 
+                yasmin.YASMIN_LOG_ERROR("Move to person timeout: ABORTING")
+                return ABORT
+            return SUCCEED
+
+    def __detection_loop(self) -> None:
+
+        self.__pre_centering_start  = time.time()
+        self.__move_to_person_start = time.time()
+
+        while not self.time_to_land and not self.timeout_controller:
+
+            inDet = self.detection_nnqueue.get()
+
+            people_detection = list()
+            people_distance = list()
+
+            detections = inDet.detections
+
+            for detection in detections:
+                
+                try:
+                    label = self.labels[detection.label]
+                except:
+                    label = detection.label
+                
+                if label == PERSON:
+                    people_detection.append(detection)
+                    people_distance.append(detection.spatialCoordinates.z)
+            
+            if len(people_detection) > 0:
+                closest_person = np.argmin(people_distance)
+                self.controller(people_detection[closest_person])
+
+
+    def controller(self, detection) -> None:
+
+
+        center_person_x = (detection.xmax*SHAPE[0] + detection.xmin*SHAPE[0])//2
+        center_person_Y = (detection.ymax*SHAPE[1] + detection.ymin*SHAPE[1])//2
+        distance_from_person = detection.spatialCoordinates.z/1000 # mm to m
+        
+        vel_y = self.pid_y.update(center_person_x)
+        vel_z = self.pid_z.update(center_person_Y)
+        vel_x = self.pid_x.update(distance_from_person)
+
+        if not self.pre_centered:
+            if time.time() - self.__pre_centering_start > PRE_CENTERING_TIMEOUT:
+                self.timeout_controller = True
+                return
+
+            yasmin.YASMIN_LOG_INFO(f"Pre-centering:\nvel_y = {vel_y}\nvel_z = {vel_z}")
+
+            self.drone.offboard_velocity(0.0, vel_y, vel_z, 0.0, False)
+
+            if(abs(SHAPE[0] - center_person_x) <= PRE_CENTER_TOLERANCE and
+            abs(SHAPE[1] - center_person_Y) <= PRE_CENTER_TOLERANCE):
+                self.pre_centered = True
+        else:
+            if time.time() - self.__move_to_person_start > MOVE_TO_PERSON_TIMEOUT:
+                self.timeout_controller = True
+                return
+
+            yasmin.YASMIN_LOG_INFO(f"Move to person:\nvel_x = {vel_x}\n \
+                                   vel_y = {vel_y}\nvel_z = {vel_z}")
+
+            self.drone.offboard_velocity(vel_x, vel_y, vel_z, 0.0, False)
+
+            if(abs(SHAPE[0] - center_person_x) <= PRE_CENTER_TOLERANCE and
+            abs(SHAPE[1] - center_person_Y) <= PRE_CENTER_TOLERANCE and
+            abs(PERSON_LAND_DISTANCE - distance_from_person) <= DISTANCE_TOLERANCE):
+                
+                self.time_to_land = True
+                return

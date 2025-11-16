@@ -29,7 +29,7 @@ setup(
     },
     entry_points={
         'console_scripts': [
-            "find_a_person    = outdoor.find_a_person.lets_bora:main",
+            "find_a_person    = outdoor.find_a_person.find_person_sm:main",
             "movement_mapping = outdoor.mapping.movement_mapping:main",
             "photos_mapping   = outdoor.mapping.photos_mapping:main",
             "full_mapping     = outdoor.mapping.mapping_sm:main",
